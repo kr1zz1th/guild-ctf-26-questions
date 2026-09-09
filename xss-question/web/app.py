@@ -18,8 +18,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 BASE_DIR = os.path.dirname(__file__)
 DB_PATH = os.path.join(BASE_DIR, "app.db")
 
-ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", os.urandom(16).hex())
 BOT_SECRET = os.environ.get("BOT_SECRET", os.urandom(16).hex())
 BOT_URL = os.environ.get("BOT_URL", "http://bot:6000")
 REPORT_TTL_SECONDS = 600
@@ -97,12 +95,7 @@ def init_db():
         );
         """
     )
-    if first_run:
-        db.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-            (ADMIN_USERNAME, generate_password_hash(ADMIN_PASSWORD), "admin"),
-        )
-        db.commit()
+
     db.close()
 
 
@@ -116,7 +109,7 @@ def decode_token(token):
     #oooh what is this HS256 and JWK jSON keys
     header = jwt.get_unverified_header(token)
     key = PUBLIC_KEY if header.get("alg") == "RS256" else PUBLIC_KEY_JWK_JSON
-    return jwt.decode(token, key, algorithms=["HS256", "RS256"], options={"verify_exp": False})
+    return jwt.decode(token, key, algorithms=jwt.algorithms.get_default_algorithms())
 
 
 def current_user():

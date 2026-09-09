@@ -1,0 +1,180 @@
+import base64
+import json
+import os
+import time
+import uuid
+from functools import wraps
+
+import jwt
+import markdown2
+
+import requests
+from cryptography.hazmat.primitives import serialization
+from flask import Flask, g, redirect, request, url_for
+from markupsafe import Markup, escape
+
+
+BOT_SECRET = os.environ["BOT_SECRET"]
+BOT_URL = os.environ["BOT_URL"]
+
+app = Flask(__name__)
+
+with open('keys/private.pem', 'rb') as f:
+    private_key = f.read()
+
+with open('keys/public.pem', 'rb') as f:
+    public_key = f.read()
+
+def b64u(n):
+    data = n.to_bytes((n.bit_length() + 7) // 8, "big")
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+def jwk_json(pem_bytes):
+    nums = serialization.load_pem_public_key(pem_bytes).public_numbers()
+    return json.dumps(
+        {
+            "kty": "RSA",
+            "kid": "server",
+            "use": "sig",
+            "alg": "RS256",
+            "n": b64u(numbers.n),
+            "e": b64u(numbers.e),
+        }
+    )
+
+pwk_pub_key = jwk_json(public_key)
+
+users = {}
+
+def issue_token(username, role):
+    payload = {"username": username, "role": role, "iat": int(time.time())}
+    token = jwt.encode(payload, private_key, algorithm="RS256")
+
+    return token
+
+def decode_token(token):
+    header = jwt.get_unverified_header(token)
+    # claude gave me this code idk what the below line does
+    key = public_key if header.get("alg") == "RS256" else pwk_pub_key
+    # im feeling lazy, ill just use the default algorithms
+    return jwt.decode(token, key, algorithms=jwt.algorithms.get_default_algorithms())
+
+def current_user():
+    token = request.cookies.get("token")
+    
+    if not token:
+        return None
+    
+    try:
+        return decode_token(token)
+    except jwt.InvalidTokenError:
+        return None
+
+def login_required(role=None):
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*a, **kw):
+            user = current_user()
+            if user is None:
+                return redirect(url_for("login_page"))
+            if role and user.get("role") != role:
+                return "Forbidden", 403
+            g.user = user
+            return fn(*a, **kw)
+
+        return wrapper
+
+    return deco
+
+LAYOUT = """
+<!doctype html>
+    <html>
+        <head>
+            <title>{title}</title>
+            <style>body{{font-family:sans-serif;max-width:640px;margin:40px auto;padding:0 16px}}
+textarea{{width:100%;height:160px}} input{{width:100%;padding:6px;margin:4px 0}}
+.report{{border:1px solid #ccc;padding:8px;margin:8px 0}}</style>
+        </head>
+        <body>
+            <h2>{title}</h2>
+            {body}
+        </body>
+</html>"""
+
+REGISTER_FORM = """
+<form method="post">
+    <input name="username" placeholder="username" required>
+    <input name="password" type="password" placeholder="password" required>
+    <button>Register</button>
+</form>
+<p><a href="/login">Already have an account?</a></p>"""
+
+LOGIN_FORM = """
+<form method="post">
+    <input name="username" placeholder="username" required>
+    <input name="password" type="password" placeholder="password" required>
+    <button>Login</button>
+</form>
+<p><a href="/register">Need an account?</a></p>
+"""
+
+ADMIN_REPORT_FORM = """
+<form method="post" action="/admin/report">
+    <p>Write a markdown report. An admin reviewer bot will open it shortly.</p>
+    <textarea name="content" placeholder="# My report"></textarea>
+    <button>Submit report</button>
+</form>"""
+
+
+
+@app.route("/")
+def indec():
+    return redirect(url_for("login_page"))
+
+@app.route("/register", methods=["GET", "POST"])
+def register_page():
+    if request.method == "GET":
+        return LAYOUT.format(title="Register", body=REGISTER_FORM)
+
+    username = request.form.get("username", "")
+    password = request.form.get("password", "")
+
+    if not username or not password:
+        return "username and password required", 400
+    
+    if username in users.keys():
+        return "username taken", 400
+    
+    #mehh it's 2 in the morning, im gonna store the password as plaintext
+    users[username] = password
+
+    return redirect(url_for("login_page"))
+
+@app.route("/login", methods=["GET", "POST"])
+def login_page():
+    if request.method == "GET":
+        return LAYOUT.format(title="Login", body=LOGIN_FORM)
+    
+    username = request.form.get("username", "")
+    password = request.form.get("password", "")
+
+    #ooh handling the passwords as plaintext maybe smth could be done here?
+    correct_pass = users.get(username)
+    
+    if (correct_pass is None) or correct_pass != password:
+        return "invalid credentials", 401
+
+    token = issue_token(username, "user")
+    resp = redirect(url_for("dashboard"))
+    resp.set_cookie("token", token, httponly=True, samesite="Lax")
+    
+    return resp
+
+@app.route("/admin", methods=["GET"])
+@login_required(role="admin")
+def admin_panel():
+    return LAYOUT.format(title="Admin panel", body=ADMIN_REPORT_FORM) 
+
+
+
+
