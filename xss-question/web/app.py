@@ -23,29 +23,24 @@ with open('keys/private.pem', 'rb') as f:
     private_key = f.read()
 
 with open('keys/public.pem', 'rb') as f:
-    public_key = f.read()
+    public_key = f.read().strip()
+
+with open('keys/public2.pem', 'r') as f:
+    public_key2 = f.read().strip()
 
 def b64u(n):
     data = n.to_bytes((n.bit_length() + 7) // 8, "big")
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
-def jwk_json(pem_bytes):
-    nums = serialization.load_pem_public_key(pem_bytes).public_numbers()
-    return json.dumps(
-        {
-            "kty": "RSA",
-            "kid": "server",
-            "use": "sig",
-            "alg": "RS256",
-            "n": b64u(nums.n),
-            "e": b64u(nums.e),
-        }
-    )
-
-pwk_pub_key = jwk_json(public_key)
-
 users = {}
 reports = {}
+
+def make_list(algo, algo_list=[]):
+    algo_list.append(algo)
+    return algo_list
+
+blocked_algos = make_list("HS256")
+allowed_algos = make_list("RS256")
 
 def issue_token(username, role):
     payload = {"username": username, "role": role, "iat": int(time.time())}
@@ -55,10 +50,16 @@ def issue_token(username, role):
 
 def decode_token(token):
     header = jwt.get_unverified_header(token)
-    # claude gave me this code idk what the below line does
-    key = public_key if header.get("alg") == "RS256" else pwk_pub_key
-    # im feeling lazy, ill just use the default algorithms
-    return jwt.decode(token, key, algorithms=jwt.algorithms.get_default_algorithms())
+
+    if header.get("algo") in blocked_algos:
+        return "invalid signature"
+
+    try:
+        decoded_token = jwt.decode(token, public_key, algorithms=allowed_algos)
+    except jwt.exceptions.InvalidKeyError:
+        decoded_token = jwt.decode(token, public_key2, algorithms=allowed_algos)
+    
+    return decoded_token
 
 def current_user():
     token = request.cookies.get("token")
@@ -82,9 +83,7 @@ def login_required(role=None):
                 return "Forbidden", 403
             g.user = user
             return fn(*a, **kw)
-
         return wrapper
-
     return deco
 
 LAYOUT = """
@@ -186,7 +185,6 @@ def admin_panel():
 
 #Bot stuff
 def render_report_html(markdown_src):
-    #is safe mode actually safe tho??
     return markdown2.markdown(markdown_src, safe_mode="escape")
 
 def notify_bot(report_id):
@@ -214,12 +212,13 @@ def submit_report():
 
     body = f"""
     <p>Submitted. The admin reviewer bot has been notified and will open it shortly.</p>
-    <p><a href="/admin">Back</a></p>
     <p><a href="/report/{report_id}/view">View your report</a></p>
+    <p><a href="/admin">Back</a></p>
     """
     return LAYOUT.format(title="Report submitted", body=body)
 
 @app.route("/report/<report_id>/view")
+#No auth check??
 def view_report(report_id):
     rep = reports.get(report_id)
 

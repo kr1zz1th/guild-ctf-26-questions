@@ -4,8 +4,6 @@ services:
     ports:
       - "5000:5000"
     environment:
-      ADMIN_USERNAME: admin
-      ADMIN_PASSWORD: omgsupersecret
       BOT_SECRET: ${BOT_SECRET:-change_me_bot_secret}
       BOT_URL: http://bot:6000
 
@@ -13,8 +11,6 @@ services:
     build: ./bot
     environment:
       WEB_URL: http://web:5000
-      ADMIN_USERNAME: admin
-      ADMIN_PASSWORD: omgsupersecret
       BOT_SECRET: ${BOT_SECRET:-change_me_bot_secret}
-      FLAG: exploiitm{100K_47_Y0U_601N6_7Hr0U6H_CV3}
+      FLAG: exploiitm{H0P3_Cl4uD3_D1D_N0t_s0Lv3_1t}
       BOT_PORT: "6000"
