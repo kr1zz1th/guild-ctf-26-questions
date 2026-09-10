@@ -28,13 +28,10 @@ with open('keys/public.pem', 'rb') as f:
 with open('keys/public2.pem', 'r') as f:
     public_key2 = f.read().strip()
 
-def b64u(n):
-    data = n.to_bytes((n.bit_length() + 7) // 8, "big")
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
-
 users = {}
 reports = {}
 
+# this just makes a list bro trust me
 def make_list(algo, algo_list=[]):
     algo_list.append(algo)
     return algo_list
@@ -51,9 +48,11 @@ def issue_token(username, role):
 def decode_token(token):
     header = jwt.get_unverified_header(token)
 
+    # making sure no unauthorised algorithm is allowed
     if header.get("algo") in blocked_algos:
-        return "invalid signature"
+        return "invalid algorithm"
 
+    # if key 1 doesn't work I shall simply use key 2
     try:
         decoded_token = jwt.decode(token, public_key, algorithms=allowed_algos)
     except jwt.exceptions.InvalidKeyError:
@@ -145,7 +144,7 @@ def register_page():
     if username in users.keys():
         return "username taken", 400
     
-    #mehh it's 2 in the morning, im gonna store the password as plaintext
+    #mehh it's 2 in the morning, im too lazy to hash the passwords
     users[username] = password
 
     return redirect(url_for("login_page"))
@@ -185,6 +184,7 @@ def admin_panel():
 
 #Bot stuff
 def render_report_html(markdown_src):
+    # whatcha looking here for, keep looking ahead
     return markdown2.markdown(markdown_src, safe_mode="escape")
 
 def notify_bot(report_id):
@@ -204,6 +204,7 @@ def submit_report():
     content = request.form.get("content", "")
     rendered = render_report_html(content)
    
+    # there's no point trying to predict the id
     report_id = uuid.uuid4().hex
 
     reports[report_id] = [g.user["username"], content, rendered, time.time()]

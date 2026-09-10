@@ -1,0 +1,16 @@
+services:
+  web:
+    build: ./web
+    ports:
+      - "5000:5000"
+    environment:
+      BOT_SECRET: 114597067429262627502932641139075346187
+      BOT_URL: http://bot:6000
+
+  bot:
+    build: ./bot
+    environment:
+      WEB_URL: http://web:5000
+      BOT_SECRET: 114597067429262627502932641139075346187
+      FLAG: exploiitm{HOPe_YOU_D1D_Not_H4r422_cl4uDe}
+      BOT_PORT: "6000"

