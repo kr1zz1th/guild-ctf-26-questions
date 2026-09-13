@@ -172,7 +172,8 @@ def login_page():
 @app.route("/dashboard")
 @login_required()
 def dashboard():
-    body = f"<p>Welcome, {escape(g.user['username'])} (role: {escape(g.user['role'])}).</p>"
+    body = f"""<p>Welcome, {escape(g.user['username'])} (role: {escape(g.user['role'])}).</p>
+                <p>Did you really think this was it ;)</p>"""
     if g.user["role"] == "admin":
         body += '<p><a href="/admin">Go to admin panel</a></p>'
     return LAYOUT.format(title="Dashboard", body=body)
