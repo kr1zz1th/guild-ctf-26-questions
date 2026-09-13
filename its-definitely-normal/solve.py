@@ -1,4 +1,4 @@
-with open('file.txt', 'r') as f:
+with open('transcript.txt', 'r') as f:
     a = f.read()
 
 b = a.split("\u200b")
